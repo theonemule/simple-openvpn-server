@@ -1,7 +1,7 @@
 #!/bin/bash
 
-
-ADMINPASSWORD="password"
+# defaults 
+ADMINPASSWORD="secret"
 DNS1="8.8.8.8"
 DNS2="8.8.4.4"
 PROTOCOL=udp
@@ -35,6 +35,7 @@ do
 	esac
 done
 
+[ "${PD}" == "secret" ] && echo "fatal: password is not set"
 
 # Detect Debian users running the script with "sh" instead of bash
 if readlink /proc/$$/exe | grep -qs "dash"; then
@@ -248,7 +249,7 @@ verb 3" > /etc/openvpn/client-common.txt
 mkdir /etc/openvpn/clients/
 
 #Setup the web server to use an self signed cert
-mkdir /etc/openvpn/clients/
+# mkdir /etc/openvpn/clients/
 
 #Set permissions for easy-rsa and open vpn to be modified by the web user.
 chown -R www-data:www-data /etc/openvpn/easy-rsa
