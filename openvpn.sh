@@ -35,7 +35,7 @@ do
 	esac
 done
 
-[ "${PD}" == "secret" ] && echo "fatal: password is not set"
+[ "${ADMINPASSWORD}" == "secret" ] && echo "fatal: password is not set" && exit 1
 
 # Detect Debian users running the script with "sh" instead of bash
 if readlink /proc/$$/exe | grep -qs "dash"; then
@@ -246,6 +246,7 @@ key-direction 1
 verb 3" > /etc/openvpn/client-common.txt
 
 # Generates the custom client.ovpn
+mv /etc/openvpn/clients/ /etc/openvpn/clients.$$/
 mkdir /etc/openvpn/clients/
 
 #Setup the web server to use an self signed cert
@@ -260,13 +261,14 @@ chmod g+s /etc/openvpn/clients/
 chmod g+s /etc/openvpn/easy-rsa/
 
 #Generate a self-signed certificate for the web server
+mv /etc/lighttpd/ssl/ /etc/lighttpd/ssl.$$/
 mkdir /etc/lighttpd/ssl/
 openssl req -new -x509 -keyout /etc/lighttpd/ssl/server.pem -out /etc/lighttpd/ssl/server.pem -days 9999 -nodes -subj "/C=US/ST=California/L=San Francisco/O=zingbox.com/OU=Ops Department/CN=zingbox.com"
 chmod 744 /etc/lighttpd/ssl/server.pem
 
 
 #Configure the web server with the lighttpd.conf from GitHub
-mv /etc/lighttpd/lighttpd.conf /etc/lighttpd/lighttpd.conf.old
+mv /etc/lighttpd/lighttpd.conf /etc/lighttpd/lighttpd.conf.$$
 wget -O /etc/lighttpd/lighttpd.conf https://raw.githubusercontent.com/kenneyhe-zingbox/simple-openvpn-server/master/lighttpd.conf
 
 #install the webserver scripts
