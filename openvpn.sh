@@ -1,7 +1,7 @@
 #!/bin/bash
 
-
-ADMINPASSWORD="password"
+# defaults 
+ADMINPASSWORD="secret"
 DNS1="8.8.8.8"
 DNS2="8.8.4.4"
 PROTOCOL=udp
@@ -35,6 +35,7 @@ do
 	esac
 done
 
+[ "${ADMINPASSWORD}" == "secret" ] && echo "fatal: password is not set" && exit 1
 
 # Detect Debian users running the script with "sh" instead of bash
 if readlink /proc/$$/exe | grep -qs "dash"; then
@@ -245,10 +246,11 @@ key-direction 1
 verb 3" > /etc/openvpn/client-common.txt
 
 # Generates the custom client.ovpn
+mv /etc/openvpn/clients/ /etc/openvpn/clients.$$/
 mkdir /etc/openvpn/clients/
 
 #Setup the web server to use an self signed cert
-mkdir /etc/openvpn/clients/
+# mkdir /etc/openvpn/clients/
 
 #Set permissions for easy-rsa and open vpn to be modified by the web user.
 chown -R www-data:www-data /etc/openvpn/easy-rsa
@@ -259,19 +261,21 @@ chmod g+s /etc/openvpn/clients/
 chmod g+s /etc/openvpn/easy-rsa/
 
 #Generate a self-signed certificate for the web server
+mv /etc/lighttpd/ssl/ /etc/lighttpd/ssl.$$/
 mkdir /etc/lighttpd/ssl/
-openssl req -new -x509 -keyout /etc/lighttpd/ssl/server.pem -out /etc/lighttpd/ssl/server.pem -days 9999 -nodes -subj "/C=UK/ST=Warwickshire/L=Leamington/O=OrgName/OU=IT Department/CN=example.com"
+openssl req -new -x509 -keyout /etc/lighttpd/ssl/server.pem -out /etc/lighttpd/ssl/server.pem -days 9999 -nodes -subj "/C=US/ST=California/L=San Francisco/O=zingbox.com/OU=Ops Department/CN=zingbox.com"
 chmod 744 /etc/lighttpd/ssl/server.pem
 
 
 #Configure the web server with the lighttpd.conf from GitHub
-mv /etc/lighttpd/lighttpd.conf /etc/lighttpd/lighttpd.conf.old
-wget -O /etc/lighttpd/lighttpd.conf https://raw.githubusercontent.com/theonemule/simple-openvpn-server/master/lighttpd.conf
+mv /etc/lighttpd/lighttpd.conf /etc/lighttpd/lighttpd.conf.$$
+wget -O /etc/lighttpd/lighttpd.conf https://raw.githubusercontent.com/kenneyhe-zingbox/simple-openvpn-server/master/lighttpd.conf
 
 #install the webserver scripts
 rm /var/www/html/*
-wget -O /var/www/html/index.sh https://raw.githubusercontent.com/theonemule/simple-openvpn-server/master/index.sh
-wget -O /var/www/html/download.sh https://raw.githubusercontent.com/theonemule/simple-openvpn-server/master/download.sh
+wget -O /var/www/html/index.sh https://raw.githubusercontent.com/kenneyhe-zingbox/simple-openvpn-server/master/index.sh
+
+wget -O /var/www/html/download.sh https://raw.githubusercontent.com/kenneyhe-zingbox/simple-openvpn-server/master/download.sh
 chown -R www-data:www-data /var/www/html/
 
 #set the password file for the WWW logon
