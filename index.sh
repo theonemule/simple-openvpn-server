@@ -8,11 +8,11 @@ echo "<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Zingbox OpenVPN Server</title>
+<title>Simple OpenVPN Server</title>
 </head>
 <body>"
 
-echo "<h1>Zingbox OpenVPN Server</h1>"
+echo "<h1>Simple OpenVPN Server</h1>"
 
 eval `echo "${QUERY_STRING}"|tr '&' ';'`
 
