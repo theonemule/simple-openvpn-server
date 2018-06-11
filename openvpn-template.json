@@ -36,7 +36,7 @@
     "publicIPAddressType": "Dynamic",
     "vmStorageAccountContainerName": "vhds",
     "vmName": "openvpnVM",
-    "vmSize": "Basic_A0",
+    "vmSize": "Standard_B1s",
     "virtualNetworkName": "openvpnVNET",
     "vnetID": "[resourceId('Microsoft.Network/virtualNetworks',variables('virtualNetworkName'))]",
     "subnetRef": "[concat(variables('vnetID'),'/subnets/',variables('subnetName'))]",
