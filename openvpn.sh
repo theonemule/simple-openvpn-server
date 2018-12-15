@@ -142,7 +142,7 @@ echo "push \"dhcp-option DNS $DNS1\"" >> /etc/openvpn/server.conf
 echo "push \"dhcp-option DNS $DNS2\"" >> /etc/openvpn/server.conf
 echo "keepalive 10 120
 cipher AES-256-CBC
-comp-lzo
+
 user nobody
 group $GROUPNAME
 persist-key
