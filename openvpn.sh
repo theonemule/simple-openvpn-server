@@ -4,8 +4,8 @@
 ADMINPASSWORD="secret"
 DNS1="8.8.8.8"
 DNS2="8.8.4.4"
-PROTOCOL=udp
-PORT=1194
+PROTOCOL=tcp
+PORT=80
 HOST=$(wget -4qO- "http://whatismyip.akamai.com/")
 
 
