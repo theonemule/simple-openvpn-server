@@ -26,7 +26,7 @@
     "imagePublisher": "Canonical",
     "imageOffer": "UbuntuServer",
     "OSDiskName": "openvpn-vhd",
-    "imageSKU": "19.04",
+    "imageSKU": "18.04-LTS",
     "nicName": "openvpnNic",
     "addressPrefix": "10.0.0.0/16",
     "subnetName": "openvpnSubnet",
