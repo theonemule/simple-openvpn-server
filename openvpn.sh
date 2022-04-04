@@ -72,7 +72,7 @@ fi
 
 
 apt-get update
-apt-get install openvpn iptables openssl ca-certificates  apache2-utils nginx -y
+apt-get install openvpn iptables openssl fcgiwrap ca-certificates  apache2-utils nginx -y
 
 # An old version of easy-rsa was available by default in some openvpn packages
 if [[ -d /etc/openvpn/easy-rsa/ ]]; then
