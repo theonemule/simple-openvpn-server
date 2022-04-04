@@ -13,7 +13,7 @@ for i in "$@"
 do
 	case $i in
 		--adminpassword=*)
-		ADMINPASSWORD="${i#*=}"
+		ADMINPASSWORD="${i#*=}"sudo 
 		;;
 		--dns1=*)
 		DNS1="${i#*=}"
@@ -53,21 +53,13 @@ if [[ ! -e /dev/net/tun ]]; then
 	exit 3
 fi
 
-if grep -qs "CentOS release 5" "/etc/redhat-release"; then
-	echo "CentOS 5 is too old and not supported"
-	exit 4
-fi
 
 if [[ -e /etc/debian_version ]]; then
 	OS=debian
 	GROUPNAME=nogroup
 	RCLOCAL='/etc/rc.local'
-elif [[ -e /etc/centos-release || -e /etc/redhat-release ]]; then
-	OS=centos
-	GROUPNAME=nobody
-	RCLOCAL='/etc/rc.d/rc.local'
 else
-	echo "Looks like you aren't running this installer on Debian, Ubuntu or CentOS"
+	echo "Looks like you aren't running this installer on Debian or Ubuntu"
 	exit 5
 fi
 
@@ -79,15 +71,8 @@ if [[ "$IP" = "" ]]; then
 fi
 
 
-
-if [[ "$OS" = 'debian' ]]; then
-	apt-get update
-	apt-get install openvpn iptables openssl ca-certificates lighttpd -y
-else
-	# Else, the distro is CentOS
-	yum install epel-release -y
-	yum install openvpn iptables openssl wget ca-certificates lighttpd -y
-fi
+apt-get update
+apt-get install openvpn iptables openssl ca-certificates  apache2-utils nginx -y
 
 # An old version of easy-rsa was available by default in some openvpn packages
 if [[ -d /etc/openvpn/easy-rsa/ ]]; then
@@ -207,22 +192,14 @@ if hash sestatus 2>/dev/null; then
 fi
 
 # And finally, restart OpenVPN
-if [[ "$OS" = 'debian' ]]; then
-	# Little hack to check for systemd
-	if pgrep systemd-journal; then
-		systemctl restart openvpn@server.service
-	else
-		/etc/init.d/openvpn restart
-	fi
+
+# Little hack to check for systemd
+if pgrep systemd-journal; then
+	systemctl restart openvpn@server.service
 else
-	if pgrep systemd-journal; then
-		systemctl restart openvpn@server.service
-		systemctl enable openvpn@server.service
-	else
-		service openvpn restart
-		chkconfig openvpn on
-	fi
+	/etc/init.d/openvpn restart
 fi
+
 
 # Try to detect a NATed connection and ask about it to potential LowEndSpirit users
 
@@ -260,25 +237,26 @@ chmod g+s /etc/openvpn/clients/
 chmod g+s /etc/openvpn/easy-rsa/
 
 #Generate a self-signed certificate for the web server
-mv /etc/lighttpd/ssl/ /etc/lighttpd/ssl.$$/
-mkdir /etc/lighttpd/ssl/
-openssl req -new -x509 -keyout /etc/lighttpd/ssl/server.pem -out /etc/lighttpd/ssl/server.pem -days 9999 -nodes -subj "/C=US/ST=California/L=San Francisco/O=example.com/OU=Ops Department/CN=example.com"
-chmod 744 /etc/lighttpd/ssl/server.pem
+# mv /etc4/lighttpd/ssl/ /etc/lighttpd/ssl.$$/
+mkdir /etc/nginx/ssl/
+openssl req -x509 -nodes -days 9999 -newkey rsa:2048 -keyout /etc/nginx/ssl/nginx.key -out /etc/nginx/ssl/nginx.crt -subj "/C=US/ST=California/L=San Francisco/O=example.com/OU=Ops Department/CN=example.com"
 
 
 #Configure the web server with the lighttpd.conf from GitHub
-mv /etc/lighttpd/lighttpd.conf /etc/lighttpd/lighttpd.conf.$$
-wget -O /etc/lighttpd/lighttpd.conf https://raw.githubusercontent.com/theonemule/simple-openvpn-server/master/lighttpd.conf
+mv  /etc/nginx/sites-available/default /etc/nginx/sites-available/default.$$
+wget -O /etc/nginx/sites-available/default https://raw.githubusercontent.com/theonemule/simple-openvpn-server/master/default
 
 #install the webserver scripts
 rm /var/www/html/*
+mkdir -p /var/www/html/
 wget -O /var/www/html/index.sh https://raw.githubusercontent.com/theonemule/simple-openvpn-server/master/index.sh
 
 wget -O /var/www/html/download.sh https://raw.githubusercontent.com/theonemule/simple-openvpn-server/master/download.sh
 chown -R www-data:www-data /var/www/html/
 
 #set the password file for the WWW logon
-echo "admin:$ADMINPASSWORD" >> /etc/lighttpd/.lighttpdpassword
+# systecho "admin:$ADMINPASSWORD" >> /etc/lighttpd/.lighttpdpassword
+htpasswd -b -c /etc/nginx/.htpasswd admin $ADMINPASSWORD
 
 #restart the web server
-service lighttpd restart
+systemctl restart nginx

@@ -1,0 +1,31 @@
+server {
+    listen   443 ssl;
+    ssl_certificate     /etc/nginx/ssl/nginx.crt;
+    ssl_certificate_key /etc/nginx/ssl/nginx.key;
+    access_log  /var/log/nginx/access.log;
+
+    root  /var/www/html;
+    index index.sh;
+
+    location ~ \.sh$ {
+        gzip off;
+        fastcgi_pass unix:/var/run/fcgiwrap.socket;
+        include /etc/nginx/fastcgi_params;
+        # regex to split $uri to $fastcgi_script_name and $fastcgi_path
+        fastcgi_split_path_info ^(.+?\.sh)(/.*)$;
+
+        # Check that the Bash script exists before passing it
+        try_files $fastcgi_script_name =404;
+
+        # Bypass the fact that try_files resets $fastcgi_path_info
+        # see: http://trac.nginx.org/nginx/ticket/321
+        set $path_info $fastcgi_path_info;
+        fastcgi_param PATH_INFO $path_info;
+
+        fastcgi_index index.sh;
+        include fastcgi.conf;
+
+        auth_basic "Restricted Content";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+    }
+}
