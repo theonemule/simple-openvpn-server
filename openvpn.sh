@@ -13,7 +13,7 @@ for i in "$@"
 do
 	case $i in
 		--adminpassword=*)
-		ADMINPASSWORD="${i#*=}"sudo 
+		ADMINPASSWORD="${i#*=}" 
 		;;
 		--dns1=*)
 		DNS1="${i#*=}"
@@ -253,6 +253,7 @@ wget -O /var/www/html/index.sh https://raw.githubusercontent.com/theonemule/simp
 
 wget -O /var/www/html/download.sh https://raw.githubusercontent.com/theonemule/simple-openvpn-server/master/download.sh
 chown -R www-data:www-data /var/www/html/
+chmod +x /var/www/html/*
 
 #set the password file for the WWW logon
 # systecho "admin:$ADMINPASSWORD" >> /etc/lighttpd/.lighttpdpassword
