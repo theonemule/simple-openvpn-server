@@ -206,7 +206,7 @@
             "version": "latest"
           },
           "osDisk": {
-            "createOption": "FromImage"
+            "createOption": "FromImage",
 		"managedDisk": {
 		    "storageAccountType": "Standard_LRS"
 		}		  
