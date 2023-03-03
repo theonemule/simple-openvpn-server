@@ -24,7 +24,7 @@
   "variables": {
     "storageAccountName": "[concat(uniquestring(resourceGroup().id),'storage')]",
     "imagePublisher": "Canonical",
-    "imageOffer": "UbuntuServer",
+    "imageOffer": "0001-com-ubuntu-server-focal",
     "OSDiskName": "openvpn-vhd",
     "imageSKU": "20_04-lts-gen2",
     "nicName": "openvpnNic",
