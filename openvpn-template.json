@@ -207,6 +207,9 @@
           },
           "osDisk": {
             "createOption": "FromImage"
+		"managedDisk": {
+		    "storageAccountType": "Standard_LRS"
+		}		  
           }
         },
         "networkProfile": {
