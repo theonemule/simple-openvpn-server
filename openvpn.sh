@@ -238,8 +238,8 @@ chmod g+s /etc/openvpn/easy-rsa/
 
 #Generate a self-signed certificate for the web server
 # mv /etc4/lighttpd/ssl/ /etc/lighttpd/ssl.$$/
-mkdir /etc/nginx/ssl/
-openssl req -x509 -nodes -days 9999 -newkey rsa:2048 -keyout /etc/nginx/ssl/nginx.key -out /etc/nginx/ssl/nginx.crt -subj "/C=US/ST=California/L=San Francisco/O=example.com/OU=Ops Department/CN=example.com"
+# mkdir /etc/nginx/ssl/
+# openssl req -x509 -nodes -days 9999 -newkey rsa:2048 -keyout /etc/nginx/ssl/nginx.key -out /etc/nginx/ssl/nginx.crt -subj "/C=US/ST=California/L=San Francisco/O=example.com/OU=Ops Department/CN=example.com"
 
 
 #Configure the web server with the lighttpd.conf from GitHub
@@ -258,6 +258,11 @@ chmod +x /var/www/html/*
 #set the password file for the WWW logon
 # systecho "admin:$ADMINPASSWORD" >> /etc/lighttpd/.lighttpdpassword
 htpasswd -b -c /etc/nginx/.htpasswd admin $ADMINPASSWORD
+
+
+#Obtain a Certificate from Let's Encrypt
+certbot run -d $HOSTNAME --agree-tos --nginx -m $EMAIL -n
+systemctl restart apache2
 
 #restart the web server
 systemctl restart nginx
