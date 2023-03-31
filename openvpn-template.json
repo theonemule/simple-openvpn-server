@@ -182,7 +182,7 @@
 			"autoUpgradeMinorVersion": true,
 			"settings": {
 				"fileUris": "[split('https://raw.githubusercontent.com/theonemule/simple-openvpn-server/master/openvpn.sh', ' ')]",
-				"commandToExecute": "[concat('bash openvpn.sh --host=', parameters('dnsNameForPublicIP'), '.', resourceGroup().location, '.cloudapp.azure.com --adminpassword=', parameters('adminPassword'))]"
+				"commandToExecute": "[concat('bash openvpn.sh --host=', parameters('dnsNameForPublicIP'), '.', resourceGroup().location, '.cloudapp.azure.com --adminpassword=', parameters('adminPassword'), '--email=', parameters('sslEmail'))]"
 			}
 		}
 	},	
