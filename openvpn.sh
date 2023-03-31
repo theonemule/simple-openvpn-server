@@ -5,6 +5,7 @@ ADMINPASSWORD="secret"
 DNS1="8.8.8.8"
 DNS2="8.8.4.4"
 PROTOCOL=udp
+EMAIL="example@example.com"
 PORT=1194
 HOST=$(wget -4qO- "http://whatismyip.akamai.com/")
 
@@ -30,6 +31,9 @@ do
 		--host=*)
 		HOST="${i#*=}"
 		;;
+		--email=*)
+		EMAIL="${i#*=}"
+		;;		
 		*)
 		;;
 	esac
@@ -261,7 +265,7 @@ htpasswd -b -c /etc/nginx/.htpasswd admin $ADMINPASSWORD
 
 
 #Obtain a Certificate from Let's Encrypt
-certbot run -d $HOSTNAME --agree-tos --nginx -m $EMAIL -n
+certbot run -d $HOST --agree-tos --nginx -m $EMAIL -n
 systemctl restart apache2
 
 #restart the web server
