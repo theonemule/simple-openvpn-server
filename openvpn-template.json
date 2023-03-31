@@ -14,6 +14,12 @@
         "description": "Password for the Virtual Machine."
       }
     },
+    "sslEmail": {
+      "type": "string",
+      "metadata": {
+        "description": "Email for Let's Encrypt."
+      }
+    },	  
     "dnsNameForPublicIP": {
       "type": "string",
       "metadata": {
