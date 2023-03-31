@@ -249,7 +249,8 @@ chmod g+s /etc/openvpn/easy-rsa/
 #Configure the web server with the lighttpd.conf from GitHub
 mv  /etc/nginx/sites-available/default /etc/nginx/sites-available/default.$$
 wget -O /etc/nginx/sites-available/default https://raw.githubusercontent.com/theonemule/simple-openvpn-server/master/default
-sed -i 's/server_name  example.com;/server_name  $HOST;/g' /etc/nginx/sites-available/default
+
+# sed -i 's/server_name  example.com;/server_name  $HOST;/g' /etc/nginx/sites-available/default
 
 
 #install the webserver scripts
