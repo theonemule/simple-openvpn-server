@@ -62,6 +62,8 @@ Otherwise, use the installer:
 	**vpnport** -- The port to be used by OpenVPN. 1194 may be blocked by some firewalls, so this is customizable. The default port is **1194**.
 
 	**protocol** -- The protocol to be used by OpenVPN. This accepts **udp** or tcp. The default is **udp**.
+	
+	**protocol** -- The email to be used by NGINX for Let's Encrypt. 
 
 	**host** -- The host name of the server. The script attempts to detect the external IP of your server if the host is not specified. ***It is highly recommended that you use a host name if your sever is not using a static IP address***. You can get a free dynamic DNS account and use a dynamic DNS updater that keeps the DNS records for your server up to date in the event that your IPa address changes.
 
