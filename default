@@ -1,7 +1,7 @@
 server {
-    listen   443 ssl;
-    ssl_certificate     /etc/nginx/ssl/nginx.crt;
-    ssl_certificate_key /etc/nginx/ssl/nginx.key;
+    listen   80;
+    # ssl_certificate     /etc/nginx/ssl/nginx.crt;
+    # ssl_certificate_key /etc/nginx/ssl/nginx.key;
     access_log  /var/log/nginx/access.log;
 
     root  /var/www/html;
