@@ -8,6 +8,7 @@ PROTOCOL=udp
 EMAIL="example@example.com"
 PORT=1194
 HOST=$(wget -4qO- "http://whatismyip.akamai.com/")
+VERSION="3.0.1"
 
 
 for i in "$@"
@@ -84,12 +85,12 @@ if [[ -d /etc/openvpn/easy-rsa/ ]]; then
 fi
 # Get easy-rsa
 
-wget -O ~/EasyRSA-3.0.1.tgz "https://github.com/OpenVPN/easy-rsa/releases/download/3.0.1/EasyRSA-3.0.1.tgz"
-tar xzf ~/EasyRSA-3.0.1.tgz -C ~/
-mv ~/EasyRSA-3.0.1/ /etc/openvpn/
-mv /etc/openvpn/EasyRSA-3.0.1/ /etc/openvpn/easy-rsa/
+wget -O ~/EasyRSA-${VERSION}.tgz "https://github.com/OpenVPN/easy-rsa/releases/download/3.0.1/EasyRSA-${VERSION}.tgz"
+tar xzf ~/EasyRSA-${VERSION}.tgz -C ~/
+mv ~/EasyRSA-${VERSION}/ /etc/openvpn/
+mv /etc/openvpn/EasyRSA-${VERSION}/ /etc/openvpn/easy-rsa/
 chown -R root:root /etc/openvpn/easy-rsa/
-rm -rf ~/EasyRSA-3.0.1.tgz
+rm -f ~/EasyRSA-${VERSION}.tgz
 cd /etc/openvpn/easy-rsa/
 
 # Create the PKI, set up the CA, the DH params and the server + client certificates
@@ -250,7 +251,7 @@ chmod g+s /etc/openvpn/easy-rsa/
 mv  /etc/nginx/sites-available/default /etc/nginx/sites-available/default.$$
 wget -O /etc/nginx/sites-available/default https://raw.githubusercontent.com/theonemule/simple-openvpn-server/master/default
 
-sed -i "s/server_name  example.com;/server_name  $HOST;/g" /etc/nginx/sites-available/default
+sed -i "s/^[[:space:]]*server_name[[:space:]]*example.com;$/\tserver_name\t$HOST;/g" /etc/nginx/sites-available/default
 
 
 #install the webserver scripts
@@ -260,7 +261,7 @@ wget -O /var/www/html/index.sh https://raw.githubusercontent.com/theonemule/simp
 
 wget -O /var/www/html/download.sh https://raw.githubusercontent.com/theonemule/simple-openvpn-server/master/download.sh
 chown -R www-data:www-data /var/www/html/
-chmod +x /var/www/html/*
+chmod +x /var/www/html/download.sh
 
 #set the password file for the WWW logon
 # systecho "admin:$ADMINPASSWORD" >> /etc/lighttpd/.lighttpdpassword
