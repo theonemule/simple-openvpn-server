@@ -5,7 +5,7 @@ ADMINPASSWORD="secret"
 DNS1="8.8.8.8"
 DNS2="8.8.4.4"
 PROTOCOL=udp
-EMAIL="example@example.com"
+EMAIL=""
 PORT=1194
 HOST=$(wget -4qO- "http://whatismyip.akamai.com/")
 VERSION="3.0.1"
@@ -41,6 +41,9 @@ do
 done
 
 [ "${ADMINPASSWORD}" == "secret" ] && echo "fatal: password is not set" && exit 1
+
+[ "${EMAIL}" == "" ] && echo "fatal: email is not set" && exit 1
+
 
 # Detect Debian users running the script with "sh" instead of bash
 if readlink /proc/$$/exe | grep -qs "dash"; then
