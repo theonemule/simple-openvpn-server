@@ -265,6 +265,7 @@ wget -O /var/www/html/index.sh https://raw.githubusercontent.com/theonemule/simp
 wget -O /var/www/html/download.sh https://raw.githubusercontent.com/theonemule/simple-openvpn-server/master/download.sh
 chown -R www-data:www-data /var/www/html/
 chmod +x /var/www/html/download.sh
+chmod +x /var/www/html/index.sh
 
 #set the password file for the WWW logon
 # systecho "admin:$ADMINPASSWORD" >> /etc/lighttpd/.lighttpdpassword
