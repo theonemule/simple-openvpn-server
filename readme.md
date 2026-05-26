@@ -13,6 +13,10 @@ The repository has been updated for current OpenVPN and Ubuntu practices:
 
 ## Quick Start (Ubuntu 24.04)
 
+Optionally, deploy directly from Azure Portal:
+
+<h2><a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Ftheonemule%2Fsimple-openvpn-server%2Fmaster%2Fopenvpn-template.json" target="_blank">Deploy to Azure</a></h2>
+
 1. SSH to your Ubuntu server and become root.
 
    ```bash

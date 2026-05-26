@@ -12,7 +12,7 @@ server {
     add_header Referrer-Policy no-referrer;
 
     location = / {
-        try_files /index.sh =404;
+        return 302 /index.sh;
     }
 
     location ~ \.sh$ {
