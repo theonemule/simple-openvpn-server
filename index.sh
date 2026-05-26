@@ -29,20 +29,35 @@ run_easyrsa() {
 build_client_profile() {
 		local client_name="$1"
 		local output_file="${CLIENTS_DIR}/${client_name}.ovpn"
+		local ca_file="${EASYRSA_DIR}/pki/ca.crt"
+		local cert_file="${EASYRSA_DIR}/pki/issued/${client_name}.crt"
+		local key_file="${EASYRSA_DIR}/pki/private/${client_name}.key"
+		local tls_key_file="${SERVER_DIR}/tc.key"
+
+		for required_file in \
+				"${ca_file}" \
+				"${cert_file}" \
+				"${key_file}" \
+				"${tls_key_file}"; do
+				if [[ ! -r "${required_file}" ]]; then
+						echo "missing_or_unreadable:${required_file}" >&2
+						return 1
+				fi
+		done
 
 		cp /etc/openvpn/client-common.txt "${output_file}"
 		{
 				echo "<ca>"
-				cat "${EASYRSA_DIR}/pki/ca.crt"
+				cat "${ca_file}"
 				echo "</ca>"
 				echo "<cert>"
-				cat "${EASYRSA_DIR}/pki/issued/${client_name}.crt"
+				cat "${cert_file}"
 				echo "</cert>"
 				echo "<key>"
-				cat "${EASYRSA_DIR}/pki/private/${client_name}.key"
+				cat "${key_file}"
 				echo "</key>"
 				echo "<tls-crypt>"
-				cat "${SERVER_DIR}/tc.key"
+				cat "${tls_key_file}"
 				echo "</tls-crypt>"
 		} >> "${output_file}"
 }
@@ -62,8 +77,12 @@ handle_action() {
 		case "${OPTION}" in
 				add)
 						if run_easyrsa --batch build-client-full "${CLIENT}" nopass >/dev/null 2>&1; then
-								build_client_profile "${CLIENT}"
-								MESSAGE="Certificate for client ${CLIENT} added"
+								if build_client_profile "${CLIENT}" 2>/dev/null; then
+										MESSAGE="Certificate for client ${CLIENT} added"
+								else
+										rm -f "${CLIENTS_DIR}/${CLIENT}.ovpn"
+										MESSAGE="Failed to build client profile ${CLIENT} (check tc.key permissions)"
+								fi
 						else
 								MESSAGE="Failed to add client ${CLIENT}"
 						fi

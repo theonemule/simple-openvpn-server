@@ -113,8 +113,10 @@ cp pki/crl.pem "${SERVER_DIR}/crl.pem"
 # tls-crypt is preferred over tls-auth for metadata protection.
 openvpn --genkey secret "${SERVER_DIR}/tc.key"
 
-chown root:root "${SERVER_DIR}"/*
-chmod 0640 "${SERVER_DIR}"/*.crt "${SERVER_DIR}"/*.key "${SERVER_DIR}"/crl.pem
+chown root:root "${SERVER_DIR}/ca.crt" "${SERVER_DIR}/server.crt" "${SERVER_DIR}/server.key" "${SERVER_DIR}/crl.pem"
+chown root:"${OPENVPN_GROUP}" "${SERVER_DIR}/tc.key"
+chmod 0640 "${SERVER_DIR}"/*.crt "${SERVER_DIR}/server.key" "${SERVER_DIR}"/tc.key "${SERVER_DIR}"/crl.pem
+chown root:"${OPENVPN_GROUP}" "${SERVER_DIR}"
 chmod 0750 "${SERVER_DIR}"
 chown nobody:nogroup "${SERVER_DIR}/crl.pem"
 
