@@ -113,6 +113,9 @@ cp pki/crl.pem "${SERVER_DIR}/crl.pem"
 # tls-crypt is preferred over tls-auth for metadata protection.
 openvpn --genkey secret "${SERVER_DIR}/tc.key"
 
+# Ensure group exists before any ownership assignments that use it.
+groupadd -f "${OPENVPN_GROUP}"
+
 chown root:root "${SERVER_DIR}/ca.crt" "${SERVER_DIR}/server.crt" "${SERVER_DIR}/server.key" "${SERVER_DIR}/crl.pem"
 chown root:"${OPENVPN_GROUP}" "${SERVER_DIR}/tc.key"
 chmod 0640 "${SERVER_DIR}"/*.crt "${SERVER_DIR}/server.key" "${SERVER_DIR}"/tc.key "${SERVER_DIR}"/crl.pem
@@ -208,7 +211,6 @@ RemainAfterExit=true
 WantedBy=multi-user.target
 EOF
 
-groupadd -f "${OPENVPN_GROUP}"
 usermod -a -G "${OPENVPN_GROUP}" www-data
 
 chown -R root:"${OPENVPN_GROUP}" "${EASYRSA_DIR}" "${CLIENTS_DIR}"
