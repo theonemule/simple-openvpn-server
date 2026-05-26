@@ -2,7 +2,7 @@
 
 This project provides a lightweight OpenVPN server installer and a web-based client profile manager.
 
-The repository has been updated for current OpenVPN and Ubuntu practices:
+5/26/2026 update: The repository has been overhauled and updated for current OpenVPN and Ubuntu practices:
 
 - Target OS: Ubuntu 24.04 LTS
 - OpenVPN server layout: `/etc/openvpn/server/server.conf`
