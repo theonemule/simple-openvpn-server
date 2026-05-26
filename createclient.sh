@@ -23,6 +23,14 @@ if ! [[ "${CLIENT}" =~ ^[a-zA-Z0-9._-]+$ ]]; then
         exit 1
 fi
 
+run_easyrsa() {
+        if [[ -x "./easyrsa" ]]; then
+                ./easyrsa "$@"
+        else
+                bash ./easyrsa "$@"
+        fi
+}
+
 newclient() {
         local client_name="$1"
         local output_file="${CLIENTS_DIR}/${client_name}.ovpn"
@@ -49,14 +57,14 @@ add_or_revoke() {
 
         case "${OPTION}" in
                 add)
-                        ./easyrsa --batch build-client-full "${CLIENT}" nopass
+                        run_easyrsa --batch build-client-full "${CLIENT}" nopass
                         newclient "${CLIENT}"
                         echo "Certificate for client ${CLIENT} added"
                         ;;
                 revoke)
                         echo "Revoking client ${CLIENT} ..."
-                        ./easyrsa --batch revoke "${CLIENT}"
-                        ./easyrsa gen-crl
+                        run_easyrsa --batch revoke "${CLIENT}"
+                        run_easyrsa gen-crl
                         rm -f "pki/reqs/${CLIENT}.req" "pki/private/${CLIENT}.key" "pki/issued/${CLIENT}.crt"
                         rm -f "${CLIENTS_DIR}/${CLIENT}.ovpn"
                         cp "${EASYRSA_DIR}/pki/crl.pem" "${SERVER_DIR}/crl.pem"

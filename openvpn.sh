@@ -212,6 +212,9 @@ usermod -a -G "${OPENVPN_GROUP}" www-data
 chown -R root:"${OPENVPN_GROUP}" "${EASYRSA_DIR}" "${CLIENTS_DIR}"
 find "${EASYRSA_DIR}" -type d -exec chmod 2770 {} \;
 find "${EASYRSA_DIR}" -type f -exec chmod 0660 {} \;
+if [[ -f "${EASYRSA_DIR}/easyrsa" ]]; then
+    chmod 0770 "${EASYRSA_DIR}/easyrsa"
+fi
 find "${CLIENTS_DIR}" -type d -exec chmod 2770 {} \;
 find "${CLIENTS_DIR}" -type f -exec chmod 0660 {} \;
 

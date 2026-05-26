@@ -18,6 +18,14 @@ is_valid_client() {
 		[[ "$1" =~ ^[a-zA-Z0-9._-]+$ ]]
 }
 
+run_easyrsa() {
+		if [[ -x "./easyrsa" ]]; then
+				./easyrsa "$@"
+		else
+				bash ./easyrsa "$@"
+		fi
+}
+
 build_client_profile() {
 		local client_name="$1"
 		local output_file="${CLIENTS_DIR}/${client_name}.ovpn"
@@ -53,7 +61,7 @@ handle_action() {
 
 		case "${OPTION}" in
 				add)
-						if ./easyrsa --batch build-client-full "${CLIENT}" nopass >/dev/null 2>&1; then
+						if run_easyrsa --batch build-client-full "${CLIENT}" nopass >/dev/null 2>&1; then
 								build_client_profile "${CLIENT}"
 								MESSAGE="Certificate for client ${CLIENT} added"
 						else
@@ -61,8 +69,8 @@ handle_action() {
 						fi
 						;;
 				revoke)
-						if ./easyrsa --batch revoke "${CLIENT}" >/dev/null 2>&1; then
-								./easyrsa gen-crl >/dev/null 2>&1
+						if run_easyrsa --batch revoke "${CLIENT}" >/dev/null 2>&1; then
+								run_easyrsa gen-crl >/dev/null 2>&1
 								rm -f "pki/reqs/${CLIENT}.req" "pki/private/${CLIENT}.key" "pki/issued/${CLIENT}.crt"
 								rm -f "${CLIENTS_DIR}/${CLIENT}.ovpn"
 								cp "${EASYRSA_DIR}/pki/crl.pem" "${SERVER_DIR}/crl.pem"
