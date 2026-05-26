@@ -103,11 +103,13 @@ cd "${EASYRSA_DIR}"
 ./easyrsa init-pki
 ./easyrsa --batch build-ca nopass
 ./easyrsa --batch build-server-full server nopass
+./easyrsa gen-dh
 ./easyrsa gen-crl
 
 cp pki/ca.crt "${SERVER_DIR}/ca.crt"
 cp pki/issued/server.crt "${SERVER_DIR}/server.crt"
 cp pki/private/server.key "${SERVER_DIR}/server.key"
+cp pki/dh.pem "${SERVER_DIR}/dh.pem"
 cp pki/crl.pem "${SERVER_DIR}/crl.pem"
 
 # tls-crypt is preferred over tls-auth for metadata protection.
@@ -116,9 +118,9 @@ openvpn --genkey secret "${SERVER_DIR}/tc.key"
 # Ensure group exists before any ownership assignments that use it.
 groupadd -f "${OPENVPN_GROUP}"
 
-chown root:root "${SERVER_DIR}/ca.crt" "${SERVER_DIR}/server.crt" "${SERVER_DIR}/server.key" "${SERVER_DIR}/crl.pem"
+chown root:root "${SERVER_DIR}/ca.crt" "${SERVER_DIR}/server.crt" "${SERVER_DIR}/server.key" "${SERVER_DIR}/dh.pem" "${SERVER_DIR}/crl.pem"
 chown root:"${OPENVPN_GROUP}" "${SERVER_DIR}/tc.key"
-chmod 0640 "${SERVER_DIR}"/*.crt "${SERVER_DIR}/server.key" "${SERVER_DIR}"/tc.key "${SERVER_DIR}"/crl.pem
+chmod 0640 "${SERVER_DIR}"/*.crt "${SERVER_DIR}/server.key" "${SERVER_DIR}/dh.pem" "${SERVER_DIR}"/tc.key "${SERVER_DIR}"/crl.pem
 chown root:"${OPENVPN_GROUP}" "${SERVER_DIR}"
 chmod 0750 "${SERVER_DIR}"
 chown nobody:nogroup "${SERVER_DIR}/crl.pem"
@@ -134,6 +136,10 @@ push "redirect-gateway def1 bypass-dhcp"
 push "dhcp-option DNS ${DNS1}"
 push "dhcp-option DNS ${DNS2}"
 keepalive 10 120
+ca ${SERVER_DIR}/ca.crt
+cert ${SERVER_DIR}/server.crt
+key ${SERVER_DIR}/server.key
+dh ${SERVER_DIR}/dh.pem
 user nobody
 group nogroup
 persist-key
@@ -144,8 +150,8 @@ explicit-exit-notify 1
 remote-cert-tls client
 auth SHA256
 tls-version-min 1.2
-tls-crypt tc.key
-crl-verify crl.pem
+tls-crypt ${SERVER_DIR}/tc.key
+crl-verify ${SERVER_DIR}/crl.pem
 data-ciphers AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305
 data-ciphers-fallback AES-256-GCM
 cipher AES-256-GCM
