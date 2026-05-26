@@ -1,290 +1,246 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# defaults 
+set -euo pipefail
+
+# defaults
 ADMINPASSWORD="secret"
-DNS1="8.8.8.8"
-DNS2="8.8.4.4"
-PROTOCOL=udp
+DNS1="1.1.1.1"
+DNS2="9.9.9.9"
+PROTOCOL="udp"
 EMAIL=""
-PORT=1194
-HOST=$(wget -4qO- "http://whatismyip.akamai.com/")
-VERSION="3.0.1"
+PORT="1194"
+HOST="$(curl -4fsSL https://api.ipify.org || true)"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+OPENVPN_GROUP="openvpn-admin"
+SERVER_DIR="/etc/openvpn/server"
+EASYRSA_DIR="/etc/openvpn/easy-rsa"
+CLIENTS_DIR="/etc/openvpn/clients"
 
-for i in "$@"
-do
-	case $i in
-		--adminpassword=*)
-		ADMINPASSWORD="${i#*=}" 
-		;;
-		--dns1=*)
-		DNS1="${i#*=}"
-		;;
-		--dns2=*)
-		DNS2="${i#*=}"
-		;;
-		--vpnport=*)
-		PORT="${i#*=}"
-		;;
-		--protocol=*)
-		PROTOCOL="${i#*=}"
-		;;
-		--host=*)
-		HOST="${i#*=}"
-		;;
-		--email=*)
-		EMAIL="${i#*=}"
-		;;		
-		*)
-		;;
-	esac
+for i in "$@"; do
+    case $i in
+        --adminpassword=*)
+            ADMINPASSWORD="${i#*=}"
+            ;;
+        --dns1=*)
+            DNS1="${i#*=}"
+            ;;
+        --dns2=*)
+            DNS2="${i#*=}"
+            ;;
+        --vpnport=*)
+            PORT="${i#*=}"
+            ;;
+        --protocol=*)
+            PROTOCOL="${i#*=}"
+            ;;
+        --host=*)
+            HOST="${i#*=}"
+            ;;
+        --email=*)
+            EMAIL="${i#*=}"
+            ;;
+        *)
+            ;;
+    esac
 done
 
-[ "${ADMINPASSWORD}" == "secret" ] && echo "fatal: password is not set" && exit 1
+if [[ "${ADMINPASSWORD}" == "secret" ]]; then
+    echo "fatal: password is not set"
+    exit 1
+fi
 
-[ "${EMAIL}" == "" ] && echo "fatal: email is not set" && exit 1
+if [[ "${PROTOCOL}" != "udp" && "${PROTOCOL}" != "tcp" ]]; then
+    echo "fatal: protocol must be udp or tcp"
+    exit 1
+fi
 
+if ! [[ "${PORT}" =~ ^[0-9]+$ ]] || ((PORT < 1 || PORT > 65535)); then
+    echo "fatal: vpn port must be a valid integer from 1-65535"
+    exit 1
+fi
 
-# Detect Debian users running the script with "sh" instead of bash
-if readlink /proc/$$/exe | grep -qs "dash"; then
-	echo "This script needs to be run with bash, not sh"
-	exit 1
+if [[ -z "${HOST}" ]]; then
+    echo "fatal: host is not set and could not be auto-detected"
+    exit 1
 fi
 
 if [[ "$EUID" -ne 0 ]]; then
-	echo "Sorry, you need to run this as root"
-	exit 2
+    echo "Sorry, you need to run this as root"
+    exit 2
 fi
 
 if [[ ! -e /dev/net/tun ]]; then
-	echo "The TUN device is not available. You need to enable TUN before running this script."
-	exit 3
+    echo "The TUN device is not available. Enable TUN before running this script."
+    exit 3
 fi
 
-
-if [[ -e /etc/debian_version ]]; then
-	OS=debian
-	GROUPNAME=nogroup
-	RCLOCAL='/etc/rc.local'
-else
-	echo "Looks like you aren't running this installer on Debian or Ubuntu"
-	exit 5
+if [[ ! -e /etc/os-release ]]; then
+    echo "Cannot determine operating system"
+    exit 4
 fi
 
-# Try to get our IP from the system and fallback to the Internet.
-
-IP=$(ip addr | grep 'inet' | grep -v inet6 | grep -vE '127\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | grep -o -E '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | head -1)
-if [[ "$IP" = "" ]]; then
-	IP=$(wget -4qO- "http://whatismyip.akamai.com/")
+. /etc/os-release
+if [[ "${ID:-}" != "ubuntu" ]]; then
+    echo "This installer is supported on Ubuntu only. Found: ${PRETTY_NAME:-unknown}"
+    exit 5
 fi
 
-
-apt-get clean
-rm -rf /var/lib/apt/lists/*
-mkdir -p /var/lib/apt/lists/partial
+export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y software-properties-common
-add-apt-repository -y universe
-apt-get update
-apt-get install openvpn iptables openssl fcgiwrap ca-certificates certbot python3-certbot-nginx apache2-utils nginx -y
+apt-get install -y \
+    openvpn easy-rsa iptables curl openssl fcgiwrap ca-certificates \
+    certbot python3-certbot-nginx apache2-utils nginx
 
-# An old version of easy-rsa was available by default in some openvpn packages
-if [[ -d /etc/openvpn/easy-rsa/ ]]; then
-	rm -rf /etc/openvpn/easy-rsa/
-fi
-# Get easy-rsa
+install -d -m 0750 -o root -g root "${SERVER_DIR}" "${CLIENTS_DIR}" "${EASYRSA_DIR}"
 
-wget -O ~/EasyRSA-${VERSION}.tgz "https://github.com/OpenVPN/easy-rsa/releases/download/v${VERSION}/EasyRSA-${VERSION}.tgz"
-tar xzf ~/EasyRSA-${VERSION}.tgz -C ~/
-mv ~/EasyRSA-${VERSION}/ /etc/openvpn/
-mv /etc/openvpn/EasyRSA-${VERSION}/ /etc/openvpn/easy-rsa/
-chown -R root:root /etc/openvpn/easy-rsa/
-rm -f ~/EasyRSA-${VERSION}.tgz
-cd /etc/openvpn/easy-rsa/
+# Reinitialize PKI each install run to keep behavior predictable.
+rm -rf "${EASYRSA_DIR}"
+cp -R /usr/share/easy-rsa "${EASYRSA_DIR}"
+chown -R root:root "${EASYRSA_DIR}"
 
-# Create the PKI, set up the CA, the DH params and the server + client certificates
+cd "${EASYRSA_DIR}"
 ./easyrsa init-pki
 ./easyrsa --batch build-ca nopass
-./easyrsa gen-dh
-./easyrsa build-server-full server nopass
-
-# ./easyrsa build-client-full $CLIENT nopass
+./easyrsa --batch build-server-full server nopass
 ./easyrsa gen-crl
 
-# Move the stuff we need
-cp pki/ca.crt pki/private/ca.key pki/dh.pem pki/issued/server.crt pki/private/server.key /etc/openvpn/easy-rsa/pki/crl.pem /etc/openvpn
+cp pki/ca.crt "${SERVER_DIR}/ca.crt"
+cp pki/issued/server.crt "${SERVER_DIR}/server.crt"
+cp pki/private/server.key "${SERVER_DIR}/server.key"
+cp pki/crl.pem "${SERVER_DIR}/crl.pem"
 
-# CRL is read with each client connection, when OpenVPN is dropped to nobody
-chown nobody:$GROUPNAME /etc/openvpn/crl.pem
+# tls-crypt is preferred over tls-auth for metadata protection.
+openvpn --genkey secret "${SERVER_DIR}/tc.key"
 
-# Generate key for tls-auth
-openvpn --genkey --secret /etc/openvpn/ta.key
+chown root:root "${SERVER_DIR}"/*
+chmod 0640 "${SERVER_DIR}"/*.crt "${SERVER_DIR}"/*.key "${SERVER_DIR}"/crl.pem
+chmod 0750 "${SERVER_DIR}"
+chown nobody:nogroup "${SERVER_DIR}/crl.pem"
 
-# Generate server.conf
-echo "port $PORT
-proto $PROTOCOL
+cat > "${SERVER_DIR}/server.conf" <<EOF
+port ${PORT}
+proto ${PROTOCOL}
 dev tun
-sndbuf 0
-rcvbuf 0
-ca ca.crt
-cert server.crt
-key server.key
-dh dh.pem
-tls-auth ta.key 0
 topology subnet
 server 10.8.0.0 255.255.255.0
-ifconfig-pool-persist ipp.txt" > /etc/openvpn/server.conf
-echo 'push "redirect-gateway def1 bypass-dhcp"' >> /etc/openvpn/server.conf
-
-# DNS
-echo "push \"dhcp-option DNS $DNS1\"" >> /etc/openvpn/server.conf
-echo "push \"dhcp-option DNS $DNS2\"" >> /etc/openvpn/server.conf
-echo "keepalive 10 120
-cipher AES-256-CBC
-data-ciphers AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305:AES-256-CBC
-data-ciphers-fallback AES-256-CBC
-
+ifconfig-pool-persist /var/log/openvpn/ipp.txt
+push "redirect-gateway def1 bypass-dhcp"
+push "dhcp-option DNS ${DNS1}"
+push "dhcp-option DNS ${DNS2}"
+keepalive 10 120
 user nobody
-group $GROUPNAME
+group nogroup
 persist-key
 persist-tun
-status openvpn-status.log
+status /var/log/openvpn/status.log
 verb 3
-crl-verify crl.pem" >> /etc/openvpn/server.conf
+explicit-exit-notify 1
+remote-cert-tls client
+auth SHA256
+tls-version-min 1.2
+tls-crypt tc.key
+crl-verify crl.pem
+data-ciphers AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305
+data-ciphers-fallback AES-256-GCM
+cipher AES-256-GCM
+EOF
 
-# Enable net.ipv4.ip_forward for the system
-sed -i '/\<net.ipv4.ip_forward\>/c\net.ipv4.ip_forward=1' /etc/sysctl.conf
-if ! grep -q "\<net.ipv4.ip_forward\>" /etc/sysctl.conf; then
-	echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf
-fi
-
-# Avoid an unneeded reboot
-echo 1 > /proc/sys/net/ipv4/ip_forward
-if pgrep firewalld; then
-	# Using both permanent and not permanent rules to avoid a firewalld
-	# reload.
-	# We don't use --add-service=openvpn because that would only work with
-	# the default port and protocol.
-	firewall-cmd --zone=public --add-port=$PORT/$PROTOCOL
-	firewall-cmd --zone=trusted --add-source=10.8.0.0/24
-	firewall-cmd --permanent --zone=public --add-port=$PORT/$PROTOCOL
-	firewall-cmd --permanent --zone=trusted --add-source=10.8.0.0/24
-	# Set NAT for the VPN subnet
-	firewall-cmd --direct --add-rule ipv4 nat POSTROUTING 0 -s 10.8.0.0/24 -j SNAT --to $IP
-	firewall-cmd --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -s 10.8.0.0/24 -j SNAT --to $IP
-else
-	# Needed to use rc.local with some systemd distros
-	if [[ "$OS" = 'debian' && ! -e $RCLOCAL ]]; then
-		echo '#!/bin/sh -e
-exit 0' > $RCLOCAL
-	fi
-	chmod +x $RCLOCAL
-	# Set NAT for the VPN subnet
-	iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -j SNAT --to $IP
-	sed -i "1 a\iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -j SNAT --to $IP" $RCLOCAL
-	if iptables -L -n | grep -qE '^(REJECT|DROP)'; then
-		# If iptables has at least one REJECT rule, we asume this is needed.
-		# Not the best approach but I can't think of other and this shouldn't
-		# cause problems.
-		iptables -I INPUT -p $PROTOCOL --dport $PORT -j ACCEPT
-		iptables -I FORWARD -s 10.8.0.0/24 -j ACCEPT
-		iptables -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-		sed -i "1 a\iptables -I INPUT -p $PROTOCOL --dport $PORT -j ACCEPT" $RCLOCAL
-		sed -i "1 a\iptables -I FORWARD -s 10.8.0.0/24 -j ACCEPT" $RCLOCAL
-		sed -i "1 a\iptables -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT" $RCLOCAL
-	fi
-fi
-# If SELinux is enabled and a custom port or TCP was selected, we need this
-if hash sestatus 2>/dev/null; then
-	if sestatus | grep "Current mode" | grep -qs "enforcing"; then
-		if [[ "$PORT" != '1194' || "$PROTOCOL" = 'tcp' ]]; then
-			# semanage isn't available in CentOS 6 by default
-			if ! hash semanage 2>/dev/null; then
-				yum install policycoreutils-python -y
-			fi
-			semanage port -a -t openvpn_port_t -p $PROTOCOL $PORT
-		fi
-	fi
-fi
-
-# And finally, restart OpenVPN
-
-# Little hack to check for systemd
-if pgrep systemd-journal; then
-	systemctl restart openvpn@server.service
-else
-	/etc/init.d/openvpn restart
-fi
-
-
-# Try to detect a NATed connection and ask about it to potential LowEndSpirit users
-
-
-# client-common.txt is created so we have a template to add further users later
-echo "client
+cat > /etc/openvpn/client-common.txt <<EOF
+client
 dev tun
-proto $PROTOCOL
-sndbuf 0
-rcvbuf 0
-remote $HOST $PORT
+proto ${PROTOCOL}
+remote ${HOST} ${PORT}
 resolv-retry infinite
 nobind
 persist-key
 persist-tun
 remote-cert-tls server
-cipher AES-256-CBC
-data-ciphers AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305:AES-256-CBC
-data-ciphers-fallback AES-256-CBC
+auth SHA256
+tls-version-min 1.2
+verb 3
 setenv opt block-outside-dns
-key-direction 1
-verb 3" > /etc/openvpn/client-common.txt
+data-ciphers AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305
+data-ciphers-fallback AES-256-GCM
+cipher AES-256-GCM
+EOF
 
-# Generates the custom client.ovpn
-mv /etc/openvpn/clients/ /etc/openvpn/clients.$$/
-mkdir /etc/openvpn/clients/
+# Enable forwarding persistently.
+cat > /etc/sysctl.d/99-openvpn-forwarding.conf <<EOF
+net.ipv4.ip_forward=1
+EOF
+sysctl --system >/dev/null
 
-#Setup the web server to use an self signed cert
-# mkdir /etc/openvpn/clients/
+WAN_IFACE="$(ip -4 route list default | awk '{print $5}' | head -n1)"
+if [[ -z "${WAN_IFACE}" ]]; then
+    echo "fatal: unable to detect default network interface"
+    exit 6
+fi
 
-#Set permissions for easy-rsa and open vpn to be modified by the web user.
-chown -R www-data:www-data /etc/openvpn/easy-rsa
-chown -R www-data:www-data /etc/openvpn/clients/
-chmod -R 755 /etc/openvpn/
-chmod -R 777 /etc/openvpn/crl.pem
-chmod g+s /etc/openvpn/clients/
-chmod g+s /etc/openvpn/easy-rsa/
+cat > /usr/local/sbin/openvpn-iptables.sh <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -o ${WAN_IFACE} -j MASQUERADE 2>/dev/null || \
+  iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o ${WAN_IFACE} -j MASQUERADE
+iptables -C INPUT -p ${PROTOCOL} --dport ${PORT} -j ACCEPT 2>/dev/null || \
+  iptables -I INPUT -p ${PROTOCOL} --dport ${PORT} -j ACCEPT
+iptables -C FORWARD -s 10.8.0.0/24 -j ACCEPT 2>/dev/null || \
+  iptables -I FORWARD -s 10.8.0.0/24 -j ACCEPT
+iptables -C FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || \
+  iptables -I FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+EOF
+chmod 0755 /usr/local/sbin/openvpn-iptables.sh
 
-#Generate a self-signed certificate for the web server
-# mv /etc4/lighttpd/ssl/ /etc/lighttpd/ssl.$$/
-# mkdir /etc/nginx/ssl/
-# openssl req -x509 -nodes -days 9999 -newkey rsa:2048 -keyout /etc/nginx/ssl/nginx.key -out /etc/nginx/ssl/nginx.crt -subj "/C=US/ST=California/L=San Francisco/O=example.com/OU=Ops Department/CN=example.com"
+cat > /etc/systemd/system/openvpn-iptables.service <<EOF
+[Unit]
+Description=Apply OpenVPN iptables rules
+After=network-online.target
+Wants=network-online.target
 
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/openvpn-iptables.sh
+RemainAfterExit=true
 
-#Configure the web server with the lighttpd.conf from GitHub
-mv  /etc/nginx/sites-available/default /etc/nginx/sites-available/default.$$
-wget -O /etc/nginx/sites-available/default https://raw.githubusercontent.com/theonemule/simple-openvpn-server/master/default
+[Install]
+WantedBy=multi-user.target
+EOF
 
-sed -i "s/^[[:space:]]*server_name[[:space:]]*example.com;$/\tserver_name\t$HOST;/g" /etc/nginx/sites-available/default
+groupadd -f "${OPENVPN_GROUP}"
+usermod -a -G "${OPENVPN_GROUP}" www-data
 
+chown -R root:"${OPENVPN_GROUP}" "${EASYRSA_DIR}" "${CLIENTS_DIR}"
+find "${EASYRSA_DIR}" -type d -exec chmod 2770 {} \;
+find "${EASYRSA_DIR}" -type f -exec chmod 0660 {} \;
+find "${CLIENTS_DIR}" -type d -exec chmod 2770 {} \;
+find "${CLIENTS_DIR}" -type f -exec chmod 0660 {} \;
 
-#install the webserver scripts
-rm /var/www/html/*
-mkdir -p /var/www/html/
-wget -O /var/www/html/index.sh https://raw.githubusercontent.com/theonemule/simple-openvpn-server/master/index.sh
+if [[ -f /etc/nginx/sites-available/default ]]; then
+    cp /etc/nginx/sites-available/default /etc/nginx/sites-available/default.bak
+fi
+install -m 0644 "${SCRIPT_DIR}/default" /etc/nginx/sites-available/default
+sed -i "s/server_name[[:space:]]\+example.com;/server_name ${HOST};/" /etc/nginx/sites-available/default
 
-wget -O /var/www/html/download.sh https://raw.githubusercontent.com/theonemule/simple-openvpn-server/master/download.sh
-chown -R www-data:www-data /var/www/html/
-chmod +x /var/www/html/download.sh
-chmod +x /var/www/html/index.sh
+install -d -m 0755 /var/www/html
+install -m 0755 "${SCRIPT_DIR}/index.sh" /var/www/html/index.sh
+install -m 0755 "${SCRIPT_DIR}/download.sh" /var/www/html/download.sh
+chown -R www-data:www-data /var/www/html
 
-#set the password file for the WWW logon
-# systecho "admin:$ADMINPASSWORD" >> /etc/lighttpd/.lighttpdpassword
-htpasswd -b -c /etc/nginx/.htpasswd admin $ADMINPASSWORD
+htpasswd -b -c /etc/nginx/.htpasswd admin "${ADMINPASSWORD}"
 
+systemctl daemon-reload
+systemctl enable --now fcgiwrap
+systemctl enable --now openvpn-iptables.service
+systemctl enable --now openvpn-server@server.service
 
-#Obtain a Certificate from Let's Encrypt
-certbot run -d $HOST --agree-tos --nginx -m $EMAIL -n
-#systemctl restart apache2
+if [[ -n "${EMAIL}" && "${HOST}" != *":"* && "${HOST}" != *"/"* ]]; then
+    certbot --nginx --agree-tos --redirect --keep-until-expiring --non-interactive \
+        -m "${EMAIL}" -d "${HOST}" || echo "warning: certbot failed; HTTPS certificate not configured"
+else
+    echo "warning: skipping certbot because --email was not provided"
+fi
 
-#restart the web server
+nginx -t
 systemctl restart nginx
+
+echo "OpenVPN + web admin install complete."

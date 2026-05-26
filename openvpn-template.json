@@ -1,243 +1,256 @@
 {
-  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-  "contentVersion": "1.0.0.0",
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "2.0.0.0",
   "parameters": {
     "adminUsername": {
       "type": "string",
       "metadata": {
-        "description": "Username for the Virtual Machine."
+        "description": "Username for the Virtual Machine"
       }
     },
     "adminPassword": {
       "type": "securestring",
       "metadata": {
-        "description": "Password for the Virtual Machine."
+        "description": "Password for the Virtual Machine"
       }
     },
     "sslEmail": {
       "type": "string",
       "metadata": {
-        "description": "Email for Let's Encrypt."
+        "description": "Email for Let's Encrypt certificate requests"
       }
-    },	  
+    },
     "dnsNameForPublicIP": {
       "type": "string",
       "metadata": {
-        "description": "Unique DNS Name for the Public IP used to access the Virtual Machine."
+        "description": "Unique DNS prefix for the Public IP"
+      }
+    },
+    "vmSize": {
+      "type": "string",
+      "defaultValue": "Standard_B1s",
+      "metadata": {
+        "description": "Azure VM size"
       }
     }
   },
   "variables": {
-    "storageAccountName": "[concat(uniquestring(resourceGroup().id),'storage')]",
-    "imagePublisher": "Canonical",
-    "imageOffer": "0001-com-ubuntu-server-focal",
-    "OSDiskName": "openvpn-vhd",
-    "imageSKU": "20_04-lts-gen2",
-    "nicName": "openvpnNic",
-    "addressPrefix": "10.0.0.0/16",
-    "subnetName": "openvpnSubnet",
-    "subnetPrefix": "10.0.0.0/24",
-    "storageAccountType": "Standard_LRS",
-    "publicIPAddressName": "openvpnPublicIP",
-    "publicIPAddressType": "Dynamic",
-    "vmStorageAccountContainerName": "vhds",
     "vmName": "openvpnVM",
-    "vmSize": "Standard_B1s",
-    "virtualNetworkName": "openvpnVNET",
-    "vnetID": "[resourceId('Microsoft.Network/virtualNetworks',variables('virtualNetworkName'))]",
-    "subnetRef": "[concat(variables('vnetID'),'/subnets/',variables('subnetName'))]",
-    "apiVersion": "2015-06-15"
+    "nicName": "openvpnNic",
+    "vnetName": "openvpnVNET",
+    "subnetName": "openvpnSubnet",
+    "publicIpName": "openvpnPublicIP",
+    "nsgName": "openvpn-nsg",
+    "vnetAddressPrefix": "10.0.0.0/16",
+    "subnetAddressPrefix": "10.0.0.0/24",
+    "scriptBaseUrl": "https://raw.githubusercontent.com/theonemule/simple-openvpn-server/master"
   },
   "resources": [
     {
-      "type": "Microsoft.Storage/storageAccounts",
-      "name": "[variables('storageAccountName')]",
-      "apiVersion": "[variables('apiVersion')]",
-      "location": "[resourceGroup().location]",
-      "properties": {
-        "accountType": "[variables('storageAccountType')]"
-      }
-    },
-    {
-      "apiVersion": "[variables('apiVersion')]",
       "type": "Microsoft.Network/publicIPAddresses",
-      "name": "[variables('publicIPAddressName')]",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('publicIpName')]",
       "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "Standard"
+      },
       "properties": {
-        "publicIPAllocationMethod": "[variables('publicIPAddressType')]",
+        "publicIPAllocationMethod": "Static",
+        "publicIPAddressVersion": "IPv4",
         "dnsSettings": {
           "domainNameLabel": "[parameters('dnsNameForPublicIP')]"
         }
       }
     },
     {
-      "apiVersion": "[variables('apiVersion')]",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('nsgName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "allow-ssh",
+            "properties": {
+              "priority": 1000,
+              "direction": "Inbound",
+              "access": "Allow",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*"
+            }
+          },
+          {
+            "name": "allow-openvpn-udp",
+            "properties": {
+              "priority": 1100,
+              "direction": "Inbound",
+              "access": "Allow",
+              "protocol": "Udp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "1194",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*"
+            }
+          },
+          {
+            "name": "allow-http",
+            "properties": {
+              "priority": 1200,
+              "direction": "Inbound",
+              "access": "Allow",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "80",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*"
+            }
+          },
+          {
+            "name": "allow-https",
+            "properties": {
+              "priority": 1210,
+              "direction": "Inbound",
+              "access": "Allow",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*"
+            }
+          }
+        ]
+      }
+    },
+    {
       "type": "Microsoft.Network/virtualNetworks",
-      "name": "[variables('virtualNetworkName')]",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('vnetName')]",
       "location": "[resourceGroup().location]",
       "properties": {
         "addressSpace": {
           "addressPrefixes": [
-            "[variables('addressPrefix')]"
+            "[variables('vnetAddressPrefix')]"
           ]
         },
         "subnets": [
           {
             "name": "[variables('subnetName')]",
             "properties": {
-              "addressPrefix": "[variables('subnetPrefix')]"
+              "addressPrefix": "[variables('subnetAddressPrefix')]"
             }
           }
         ]
       }
     },
     {
-      "apiVersion": "[variables('apiVersion')]",
       "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2023-09-01",
       "name": "[variables('nicName')]",
       "location": "[resourceGroup().location]",
       "dependsOn": [
-        "[concat('Microsoft.Network/publicIPAddresses/', variables('publicIPAddressName'))]",
-        "[concat('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]",
-		"[concat('Microsoft.Network/networkSecurityGroups/', 'openvpn-nsg')]"
+        "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIpName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
       ],
       "properties": {
+        "networkSecurityGroup": {
+          "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
+        },
         "ipConfigurations": [
           {
             "name": "ipconfig1",
             "properties": {
               "privateIPAllocationMethod": "Dynamic",
-              "publicIPAddress": {
-                "id": "[resourceId('Microsoft.Network/publicIPAddresses',variables('publicIPAddressName'))]"
-              },
               "subnet": {
-                "id": "[variables('subnetRef')]"
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnetName'))]"
+              },
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIpName'))]"
               }
             }
           }
         ]
       }
     },
-	{
-		"name": "['openvpn-nsg']",
-		"type": "Microsoft.Network/networkSecurityGroups",
-		"apiVersion": "2016-09-01",
-		"location": "[resourceGroup().location]",
-		"properties": {
-			"securityRules": [
-				{
-					"name": "default-allow-ssh",
-					"properties": {
-						"priority": 1000,
-						"sourceAddressPrefix": "*",
-						"protocol": "TCP",
-						"destinationPortRange": "22",
-						"access": "Allow",
-						"direction": "Inbound",
-						"sourcePortRange": "*",
-						"destinationAddressPrefix": "*"
-					}
-				},
-				{
-					"name": "default-allow-openvpn",
-					"properties": {
-						"priority": 1100,
-						"sourceAddressPrefix": "*",
-						"protocol": "UDP",
-						"destinationPortRange": "1194",
-						"access": "Allow",
-						"direction": "Inbound",
-						"sourcePortRange": "*",
-						"destinationAddressPrefix": "*"
-					}
-				},
-				{
-					"name": "default-allow-https",
-					"properties": {
-						"priority": 1200,
-						"sourceAddressPrefix": "*",
-						"protocol": "UDP",
-						"destinationPortRange": "443",
-						"access": "Allow",
-						"direction": "Inbound",
-						"sourcePortRange": "*",
-						"destinationAddressPrefix": "*"
-					}
-				}
-			]
-		}
-	},
-	{
-		"type": "Microsoft.Compute/virtualMachines/extensions",
-		"name": "[concat(variables('vmName'),'/', 'openvpn-setup')]",
-		"apiVersion": "['2015-06-15']",
-		"location": "[resourceGroup().location]",
-		"dependsOn": [
-			"[concat('Microsoft.Compute/virtualMachines/', variables('vmName'))]"
-		],
-		"properties": {
-			"publisher": "Microsoft.Azure.Extensions",
-			"type": "CustomScript",
-			"typeHandlerVersion": "2.0",
-			"autoUpgradeMinorVersion": true,
-      "settings": {
-        "fileUris": "[split('https://raw.githubusercontent.com/theonemule/simple-openvpn-server/master/openvpn.sh', ' ')]",
-        "commandToExecute": "[concat('bash openvpn.sh --host=', parameters('dnsNameForPublicIP'), '.', resourceGroup().location, '.cloudapp.azure.com --adminpassword=''', parameters('adminPassword'), ''' --email=''', parameters('sslEmail'), '''')]"
-      }
-		}
-	},	
     {
-      "apiVersion": "2016-04-30-preview",
       "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2023-09-01",
       "name": "[variables('vmName')]",
       "location": "[resourceGroup().location]",
       "dependsOn": [
-        "[concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]",
-        "[concat('Microsoft.Network/networkInterfaces/', variables('nicName'))]"
+        "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"
       ],
       "properties": {
         "hardwareProfile": {
-          "vmSize": "[variables('vmSize')]"
+          "vmSize": "[parameters('vmSize')]"
         },
         "osProfile": {
           "computerName": "[variables('vmName')]",
           "adminUsername": "[parameters('adminUsername')]",
-          "adminPassword": "[parameters('adminPassword')]"
+          "adminPassword": "[parameters('adminPassword')]",
+          "linuxConfiguration": {
+            "disablePasswordAuthentication": false
+          }
         },
         "storageProfile": {
           "imageReference": {
-            "publisher": "[variables('imagePublisher')]",
-            "offer": "[variables('imageOffer')]",
-            "sku": "[variables('imageSKU')]",
+            "publisher": "Canonical",
+            "offer": "ubuntu-24_04-lts",
+            "sku": "server",
             "version": "latest"
           },
           "osDisk": {
             "createOption": "FromImage",
-		"managedDisk": {
-		    "storageAccountType": "Standard_LRS"
-		}		  
+            "managedDisk": {
+              "storageAccountType": "Standard_LRS"
+            }
           }
         },
         "networkProfile": {
           "networkInterfaces": [
             {
-              "id": "[resourceId('Microsoft.Network/networkInterfaces',variables('nicName'))]"
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"
             }
           ]
-        },
-        "diagnosticsProfile": {
-          "bootDiagnostics": {
-            "enabled": "true",
-            "storageUri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), variables('apiVersion')).primaryEndpoints.blob)]"
-          }
         }
       }
-    }	
-  ],
-      "outputs": {
-        "httpSite": {
-            "type": "string",
-            "value": "[concat('Browse to: ', parameters('dnsNameForPublicIP'), '.', resourceGroup().location, '.cloudapp.azure.com and logon with u:admin p:', parameters('adminPassword'))]"
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "apiVersion": "2023-09-01",
+      "name": "[concat(variables('vmName'), '/openvpn-setup')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]"
+      ],
+      "properties": {
+        "publisher": "Microsoft.Azure.Extensions",
+        "type": "CustomScript",
+        "typeHandlerVersion": "2.1",
+        "autoUpgradeMinorVersion": true,
+        "settings": {
+          "fileUris": [
+            "[concat(variables('scriptBaseUrl'), '/openvpn.sh')]",
+            "[concat(variables('scriptBaseUrl'), '/default')]",
+            "[concat(variables('scriptBaseUrl'), '/index.sh')]",
+            "[concat(variables('scriptBaseUrl'), '/download.sh')]"
+          ],
+          "commandToExecute": "[concat('chmod +x ./openvpn.sh ./index.sh ./download.sh && sudo ./openvpn.sh --host=', parameters('dnsNameForPublicIP'), '.', resourceGroup().location, '.cloudapp.azure.com --adminpassword=''', parameters('adminPassword'), ''' --email=''', parameters('sslEmail'), '''')]"
         }
+      }
     }
+  ],
+  "outputs": {
+    "vpnEndpoint": {
+      "type": "string",
+      "value": "[concat(parameters('dnsNameForPublicIP'), '.', resourceGroup().location, '.cloudapp.azure.com')]"
+    },
+    "adminPortal": {
+      "type": "string",
+      "value": "[concat('https://', parameters('dnsNameForPublicIP'), '.', resourceGroup().location, '.cloudapp.azure.com')]"
+    }
+  }
 }

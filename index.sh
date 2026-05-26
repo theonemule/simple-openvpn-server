@@ -1,163 +1,169 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-#The admin interface for OpenVPN
+set -uo pipefail
+
+EASYRSA_DIR="/etc/openvpn/easy-rsa"
+SERVER_DIR="/etc/openvpn/server"
+CLIENTS_DIR="/etc/openvpn/clients"
+OPTION=""
+CLIENT=""
+MESSAGE=""
+
+urldecode() {
+		local data="${1//+/ }"
+		printf '%b' "${data//%/\\x}"
+}
+
+is_valid_client() {
+		[[ "$1" =~ ^[a-zA-Z0-9._-]+$ ]]
+}
+
+build_client_profile() {
+		local client_name="$1"
+		local output_file="${CLIENTS_DIR}/${client_name}.ovpn"
+
+		cp /etc/openvpn/client-common.txt "${output_file}"
+		{
+				echo "<ca>"
+				cat "${EASYRSA_DIR}/pki/ca.crt"
+				echo "</ca>"
+				echo "<cert>"
+				cat "${EASYRSA_DIR}/pki/issued/${client_name}.crt"
+				echo "</cert>"
+				echo "<key>"
+				cat "${EASYRSA_DIR}/pki/private/${client_name}.key"
+				echo "</key>"
+				echo "<tls-crypt>"
+				cat "${SERVER_DIR}/tc.key"
+				echo "</tls-crypt>"
+		} >> "${output_file}"
+}
+
+handle_action() {
+		if [[ -z "${OPTION}" || -z "${CLIENT}" ]]; then
+				return
+		fi
+
+		if ! is_valid_client "${CLIENT}"; then
+				MESSAGE="Invalid client name"
+				return
+		fi
+
+		cd "${EASYRSA_DIR}" || return
+
+		case "${OPTION}" in
+				add)
+						if ./easyrsa --batch build-client-full "${CLIENT}" nopass >/dev/null 2>&1; then
+								build_client_profile "${CLIENT}"
+								MESSAGE="Certificate for client ${CLIENT} added"
+						else
+								MESSAGE="Failed to add client ${CLIENT}"
+						fi
+						;;
+				revoke)
+						if ./easyrsa --batch revoke "${CLIENT}" >/dev/null 2>&1; then
+								./easyrsa gen-crl >/dev/null 2>&1
+								rm -f "pki/reqs/${CLIENT}.req" "pki/private/${CLIENT}.key" "pki/issued/${CLIENT}.crt"
+								rm -f "${CLIENTS_DIR}/${CLIENT}.ovpn"
+								cp "${EASYRSA_DIR}/pki/crl.pem" "${SERVER_DIR}/crl.pem"
+								chown nobody:nogroup "${SERVER_DIR}/crl.pem"
+								chmod 0640 "${SERVER_DIR}/crl.pem"
+								MESSAGE="Certificate for client ${CLIENT} revoked"
+						else
+								MESSAGE="Failed to revoke client ${CLIENT}"
+						fi
+						;;
+				*)
+						MESSAGE="Unknown action"
+						;;
+		esac
+}
+
+for pair in ${QUERY_STRING//&/ }; do
+		key="${pair%%=*}"
+		val="${pair#*=}"
+		decoded="$(urldecode "${val}")"
+		case "${key}" in
+				option)
+						OPTION="${decoded}"
+						;;
+				client)
+						CLIENT="${decoded}"
+						;;
+				*)
+						;;
+		esac
+done
+
+handle_action
 
 echo "Content-type: text/html"
 echo ""
-echo "<!doctype html>
-<html lang=\"en\">
-  <head>
-    <meta charset=\"utf-8\">
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1, shrink-to-fit=no\">
-    <meta name=\"description\" content=\" A simple OpenVPN server with a web-based admin panel..\">
-    <meta name=\"author\" content=\"Blaize Stewart\">
-    <title>Simple OpenVPN Server</title>
+cat <<'HTML'
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>OpenVPN Admin</title>
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+	<style>
+		body { background: linear-gradient(120deg, #e6f4ea, #f8fbff); min-height: 100vh; }
+		.card { border: 0; box-shadow: 0 0.5rem 1.25rem rgba(20, 40, 80, 0.1); }
+	</style>
+</head>
+<body>
+	<main class="container py-5">
+		<div class="card p-4 mb-4">
+			<h1 class="h4 mb-3">Simple OpenVPN Server</h1>
+			<p class="text-secondary mb-0">Client certificate management</p>
+		</div>
+HTML
 
-
-    <!-- Bootstrap core CSS -->
-  <link rel=\"stylesheet\" href=\"https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css\" >
-
-
-<meta name=\"theme-color\" content=\"#563d7c\">
-
-
-    <style>
-	
-	  body {
-		padding-top:100px;
-	  }	
-
-      .bd-placeholder-img {
-        font-size: 1.125rem;
-        text-anchor: middle;
-        -webkit-user-select: none;
-        -moz-user-select: none;
-        -ms-user-select: none;
-        user-select: none;
-      }
-
-      @media (min-width: 768px) {
-        .bd-placeholder-img-lg {
-          font-size: 3.5rem;
-        }
-      }
-	  
-  
-    </style>
-    <!-- Custom styles for this template -->
-
-  </head>
-
-  
-<body >
-
-
-<nav class=\"navbar navbar-expand-md navbar-dark bg-dark fixed-top\">
-<a class=\"navbar-brand\" href=\"#\">Simple OpenVPN Server</a>
-<button class=\"navbar-toggler\" type=\"button\" data-toggle=\"collapse\" data-target=\"#navbarsExampleDefault\" aria-controls=\"navbarsExampleDefault\" aria-expanded=\"false\" aria-label=\"Toggle navigation\">
-<span class=\"navbar-toggler-icon\"></span>
-</button>
-
-<div class=\"collapse navbar-collapse\" id=\"navbarsExampleDefault\">
-<ul class=\"navbar-nav mr-auto\">
-</ul>
-</div>
-</nav>
-
-<main role=\"main\" class=\"container\">
-
-<div class=\"container\">"
-
-
-eval `echo "${QUERY_STRING}"|tr '&' ';'`
-
-IP=$(wget -4qO- "http://whatismyip.akamai.com/")
-
-newclient () {
-	# Generates the custom client.ovpn
-	cp /etc/openvpn/client-common.txt /etc/openvpn/clients/$1.ovpn
-	echo "<ca>" >> /etc/openvpn/clients/$1.ovpn
-	cat /etc/openvpn/easy-rsa/pki/ca.crt >> /etc/openvpn/clients/$1.ovpn
-	echo "</ca>" >> /etc/openvpn/clients/$1.ovpn
-	echo "<cert>" >> /etc/openvpn/clients/$1.ovpn
-	cat /etc/openvpn/easy-rsa/pki/issued/$1.crt >> /etc/openvpn/clients/$1.ovpn
-	echo "</cert>" >> /etc/openvpn/clients/$1.ovpn
-	echo "<key>" >> /etc/openvpn/clients/$1.ovpn
-	cat /etc/openvpn/easy-rsa/pki/private/$1.key >> /etc/openvpn/clients/$1.ovpn
-	echo "</key>" >> /etc/openvpn/clients/$1.ovpn
-	echo "<tls-auth>" >> /etc/openvpn/clients/$1.ovpn
-	cat /etc/openvpn/ta.key >> /etc/openvpn/clients/$1.ovpn
-	echo "</tls-auth>" >> /etc/openvpn/clients/$1.ovpn
-}
-
-cd /etc/openvpn/easy-rsa/
-
-case $option in
-	"add") #Add a client
-		./easyrsa build-client-full $client nopass
-		# Generates the custom client.ovpn
-		newclient "$client"
-		echo "<h3>Certificate for client <span style='color:red'>$client</span> added.</h3>"
-	;;
-	"revoke") #Revoke a client
-		echo "<span style='display:none'>"
-		./easyrsa --batch revoke $client
-		./easyrsa gen-crl
-		echo "</span>"
-		rm -rf pki/reqs/$client.req
-		rm -rf pki/private/$client.key
-		rm -rf pki/issued/$client.crt
-		rm -rf /etc/openvpn/crl.pem
-		cp /etc/openvpn/easy-rsa/pki/crl.pem /etc/openvpn/crl.pem
-		# CRL is read with each client connection, when OpenVPN is dropped to nobody
-		echo "<h3>Certificate for client <span style='color:red'>$client</span> revoked.</h3>"
-	;;
-esac
-
-NUMBEROFCLIENTS=$(tail -n +2 /etc/openvpn/easy-rsa/pki/index.txt | grep -c "^V")
-if [[ "$NUMBEROFCLIENTS" = '0' ]]; then
-	echo "<h3>You have no existing clients.<h3>"
-else
-
-	echo "<div class=\"container\">"
-
-	while read c; do
-		if [[ $(echo $c | grep -c "^V") = '1' ]]; then
-			clientName=$(echo $c | cut -d '=' -f 2)
-			
-			if [[ "$clientName" != "server" ]] ; then			
-				echo "<div class=\"row\"><div class=\"col-md-4\">$clientName</div>"
-				echo "<div class=\"col-md-2\"><a href='index.sh?option=revoke&client=$clientName'>🗑️ Revoke</a></div>"
-				echo "<div class=\"col-md-2\"><a target='_blank' href='download.sh?client=$clientName'>📥 Download</a></div></div>"
-			fi
-		fi
-	done </etc/openvpn/easy-rsa/pki/index.txt
-	
-	echo "</div>"
-	
+if [[ -n "${MESSAGE}" ]]; then
+		echo "<div class='alert alert-info'>${MESSAGE}</div>"
 fi
 
-echo "
-<div class=\"container\">
-<form action='index.sh' method='get'>
-<input type='hidden' name='option' value='add'>
-New Client: <input type='text' name='client'><input type='submit' value='Add'>
-</form>
-</div>
-"
+echo "<div class='card p-4 mb-4'><h2 class='h5 mb-3'>Clients</h2>"
+active_clients=0
+while read -r line; do
+		if [[ "${line}" =~ ^V ]]; then
+				client_name="$(echo "${line}" | cut -d '=' -f 2)"
+				if [[ "${client_name}" != "server" ]]; then
+						active_clients=1
+						echo "<div class='d-flex justify-content-between align-items-center border-bottom py-2'>"
+						echo "<span>${client_name}</span>"
+						echo "<span>"
+						echo "<a class='btn btn-sm btn-outline-danger me-2' href='index.sh?option=revoke&client=${client_name}'>Revoke</a>"
+						echo "<a class='btn btn-sm btn-outline-primary' target='_blank' href='download.sh?client=${client_name}'>Download</a>"
+						echo "</span>"
+						echo "</div>"
+				fi
+		fi
+done < "${EASYRSA_DIR}/pki/index.txt"
 
+if [[ "${active_clients}" -eq 0 ]]; then
+		echo "<p class='text-secondary mb-0'>No clients found.</p>"
+fi
 
-echo "</div>
+cat <<'HTML'
+		</div>
 
-</main>
+		<div class="card p-4">
+			<h2 class="h5 mb-3">Create client</h2>
+			<form action="index.sh" method="get" class="row g-2">
+				<input type="hidden" name="option" value="add">
+				<div class="col-sm-8">
+					<input class="form-control" type="text" name="client" placeholder="client-name" required>
+				</div>
+				<div class="col-sm-4">
+					<button class="btn btn-success w-100" type="submit">Add client</button>
+				</div>
+			</form>
+		</div>
+	</main>
+</body>
+</html>
+HTML
 
-
-
-<script src=\"https://code.jquery.com/jquery-3.4.1.slim.min.js\" integrity=\"sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n\" crossorigin=\"anonymous\"></script>
-<script src=\"https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js\" integrity=\"sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo\" crossorigin=\"anonymous\"></script>
-<script src=\"https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js\" integrity=\"sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6\" crossorigin=\"anonymous\"></script>
-	  
-	  </body>
-	  
-</html>"
 exit 0
